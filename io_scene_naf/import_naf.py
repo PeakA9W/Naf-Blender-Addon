@@ -106,7 +106,7 @@ def check_version(rootBlock):
 def time_to_frame(time):
 	return int(time / 5000 * 31.5 * bpy.context.scene.render.fps_base)
 
-def read_bone_ani(nx3_bone_ani, armature):
+def read_bone_ani(nx3_bone_ani, armature, parents_only):
 
 	name = nx3_bone_ani.getBlock(0).getDataString(0)
 	#print(name)
@@ -114,9 +114,6 @@ def read_bone_ani(nx3_bone_ani, armature):
 	parent_index = nx3_bone_ani.getBlock(1).getDataInt(0)
 	#print(parent_index)
 
-	#if parent_index != -1:
-	#	armature.data.edit_bones[name].use_connect = False
-	#	armature.data.edit_bones[name].parent = armature.data.edit_bones[parent_index]
 
 	pos_time_array = [nx3_bone_ani.getBlock(4).getDataInt(i) for i in range(nx3_bone_ani.getBlock(4).getElementNumber())]
 	pos_key_array = [nx3_bone_ani.getBlock(5).getDataFloat(i) for i in range(nx3_bone_ani.getBlock(5).getElementNumber())]
@@ -135,7 +132,10 @@ def read_bone_ani(nx3_bone_ani, armature):
 	if name.replace('@','_') in armature.pose.bones:
 		name = name.replace('@','_')
 
-
+	if parents_only and parent_index != -1:
+		armature.data.edit_bones[name].use_connect = False
+		armature.data.edit_bones[name].parent = armature.data.edit_bones[parent_index]
+	
 	for bn in armature.pose.bones:
 		if bn.name == name:
 			print(bn.name)
@@ -143,33 +143,35 @@ def read_bone_ani(nx3_bone_ani, armature):
 
 	bone.rotation_mode = 'QUATERNION'
 	t, q, s = bone.matrix.decompose()
+
+	#'''
+	if not parents_only:
+		for i, time in enumerate(pos_time_array):
+			time = int(time / 160)
+
+			#print(bone.matrix)
+
+			q[0], q[1], q[2], q[3] = rot_key_array[i*4+3], rot_key_array[i*4], rot_key_array[i*4+1], rot_key_array[i*4+2]
+			t[0], t[1], t[2] = pos_key_array[i*3], pos_key_array[i*3+1], pos_key_array[i*3+2]
+			T = Matrix.Translation(t)
+
+			R = q.to_matrix().to_4x4()
+
+			S = Matrix.Diagonal(s.to_4d())
+
+			M = T @ R @ S
+			#print(M)
+
+			bone.matrix = M
+			#bpy.context.view_layer.update()
+
+			bone.keyframe_insert('location', frame=time)
+			bone.keyframe_insert('rotation_quaternion', frame=time)
 	
 	#'''
-	for i, time in enumerate(pos_time_array):
-		time = int(time / 160)
-
-		#print(bone.matrix)
-
-		q[0], q[1], q[2], q[3] = rot_key_array[i*4+3], rot_key_array[i*4], rot_key_array[i*4+1], rot_key_array[i*4+2]
-		t[0], t[1], t[2] = pos_key_array[i*3], pos_key_array[i*3+1], pos_key_array[i*3+2]
-		T = Matrix.Translation(t)
-
-		R = q.to_matrix().to_4x4()
-
-		S = Matrix.Diagonal(s.to_4d())
-
-		M = T @ R @ S
-		#print(M)
-
-		bone.matrix = M
-		#bpy.context.view_layer.update()
-
-		bone.keyframe_insert('location', frame=time)
-		bone.keyframe_insert('rotation_quaternion', frame=time)
-	#'''
-
-	bpy.context.scene.frame_start = int(pos_time_array[0] / 160)
-	bpy.context.scene.frame_end = time_to_frame(pos_time_array[len(pos_time_array) - 1])
+	if not parents_only:
+		bpy.context.scene.frame_start = int(pos_time_array[0] / 160)
+		bpy.context.scene.frame_end = time_to_frame(pos_time_array[len(pos_time_array) - 1])
 	
 def read_ani_header(rootBlock, filename):
 	nx3_bone_ani_channel_block = rootBlock.getBlockByGuid(nx3_bone_ani_header_guid.bytes_le)
@@ -189,16 +191,45 @@ def read_ani_header(rootBlock, filename):
 	bone_ani_array = channel_array.getBlock(4)
 
 	if bpy.context.active_object != None and bpy.context.active_object.type == 'ARMATURE':
-		armature = bpy.context.active_object 
+		armature = bpy.context.active_object
+		new_armature = armature.copy()
+		new_armature.data = new_armature.data.copy()
+		bpy.context.collection.objects.link(new_armature)
 	else:
 		print("Please select the armature")
 		return
 
 	nx3_bone_ani_blocks = [bone_ani_array.getBlock(i) for i in range(bone_ani_array.getElementNumber())]
+
 	bpy.ops.object.mode_set(mode = 'EDIT')
 	for nx3_bone_ani in nx3_bone_ani_blocks:
-		read_bone_ani(nx3_bone_ani, armature)	
+		read_bone_ani(nx3_bone_ani, armature, True)	
+		read_bone_ani(nx3_bone_ani, new_armature, False)	
+
 	bpy.ops.object.mode_set(mode = 'OBJECT')
+
+	#'''
+	for bone in armature.pose.bones:
+		constraint = bone.constraints.new('COPY_TRANSFORMS')
+		constraint.target = new_armature
+		constraint.subtarget = bone.name
+
+	new_armature.select_set(False)
+	armature.select_set(True)
+
+	bpy.ops.nla.bake(
+	frame_start=bpy.context.scene.frame_start,
+	frame_end=bpy.context.scene.frame_end,
+	only_selected=False,
+	visual_keying=True,
+	clear_constraints=True,
+	clear_parents=False,
+	bake_types={'POSE'}
+	)
+
+	bpy.data.objects.remove(new_armature, do_unlink=True)
+	#'''
+
 
 def read_naf_file(parser, naf_filename):
 	info("Reading file %s" % naf_filename)
