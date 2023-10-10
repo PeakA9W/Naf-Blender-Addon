@@ -1,4 +1,3 @@
-#
 # BTRFdom - Rappelz BTRF Document Object Model
 # By Glandu2/Peakz
 # Copyright 2013 Glandu2
@@ -22,14 +21,14 @@ bl_info = {
 	"name": "Rappelz NAF format",
 	"author": "Glandu2/Peakz",
 	"blender": (3, 0, 0),
-	"version": (0, 1, 0),
+	"version": (0, 3, 0),
 	"location": "File > Import-Export",
 	"description": "Export to a Rappelz NAF file",
 	"category": "Import-Export"}
 
 import bpy
 from bpy_extras.io_utils import ExportHelper, ImportHelper
-from bpy.props import StringProperty #, BoolProperty
+from bpy.props import StringProperty , BoolProperty
 from . import export_naf
 from . import import_naf
 import imp
@@ -94,12 +93,22 @@ def register():
 	bpy.types.TOPBAR_MT_file_export.append(menu_func_export)
 
 
+	bpy.types.Object.ISDIFK = BoolProperty(
+        name="ISDIFK",
+        description="Use DIFK time Export",
+        default=False,
+        subtype="NONE",
+    )
+
+
 def unregister():
 	for cls in classes:
 		bpy.utils.unregister_class(cls)
 	
 	bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
 	bpy.types.TOPBAR_MT_file_export.remove(menu_func_export)
+
+	del bpy.types.Object.ISDIFK
 
 if __name__ == "__main__":
 	register()

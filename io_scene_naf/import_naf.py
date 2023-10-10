@@ -67,7 +67,9 @@ import bmesh
 import uuid
 import mathutils
 from .btrfdom import BtrfParser, TmlFile
+from . import DIFK
 import os
+import imp
 from mathutils import Matrix
 
 nx3_version_header_guid = uuid.UUID('{81BCE021-AD76-346f-9C7D-19885FD118B6}')
@@ -138,7 +140,6 @@ def read_bone_ani(nx3_bone_ani, armature, parents_only):
 	
 	for bn in armature.pose.bones:
 		if bn.name == name:
-			print(bn.name)
 			bone = bn
 
 	bone.rotation_mode = 'QUATERNION'
@@ -146,6 +147,7 @@ def read_bone_ani(nx3_bone_ani, armature, parents_only):
 
 	#'''
 	if not parents_only:
+		#print(bn.name)
 		for i, time in enumerate(pos_time_array):
 			time = int(time / 160)
 
@@ -177,7 +179,7 @@ def read_ani_header(rootBlock, filename):
 	nx3_bone_ani_channel_block = rootBlock.getBlockByGuid(nx3_bone_ani_header_guid.bytes_le)
 
 	bone_count = nx3_bone_ani_channel_block.getBlock(0).getDataInt(0)
-	print(bone_count)
+	#print(bone_count)
 	channel_array = nx3_bone_ani_channel_block.getBlock(1).getBlock(0)
 
 	channel_name = channel_array.getBlock(0).getDataString(0)
@@ -246,14 +248,22 @@ def read_naf_file(parser, naf_filename):
 
 
 def read(naf_filename):
-	script_dir = os.path.dirname(os.path.abspath(__file__))
+	with open(naf_filename,'rb') as file:
+		format = file.read(4)
+	
+	print(format)
+	if format == b'BTRF':		
+		script_dir = os.path.dirname(os.path.abspath(__file__))
 
-	tmlFile = TmlFile()
-	tmlFile.create()
-	tmlFile.parseFile(script_dir + "/nx3.tml")
-	tmlFile.parseFile(script_dir + "/nobj.tml")
+		tmlFile = TmlFile()
+		tmlFile.create()
+		tmlFile.parseFile(script_dir + "/nx3.tml")
+		tmlFile.parseFile(script_dir + "/nobj.tml")
 
-	parser = BtrfParser()
-	parser.create(tmlFile)
+		parser = BtrfParser()
+		parser.create(tmlFile)
 
-	read_naf_file(parser, naf_filename)
+		read_naf_file(parser, naf_filename)
+	elif format == b'DIFK':
+		imp.reload(DIFK)
+		DIFK.readDIFK(naf_filename)

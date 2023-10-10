@@ -166,9 +166,14 @@ def get_bone_ani(tmlFile, rootBlock, armature, bone, frames):
 		if frame != 0:
 			add = int((frame - 1) / 6)
 
-		pos_time = frame * 160 + add
+		if armature.ISDIFK:
+			pos_time = frame * 100
 		
-		rot_time = frame * 160 + add
+			rot_time = frame * 100
+		else:
+			pos_time = frame * 160 + add
+		
+			rot_time = frame * 160 + add
 
 		pos_key = bone.matrix.translation
 
@@ -269,7 +274,10 @@ def get_bone_ani_channel(tmlFile, rootBlock, armature):
 
 	Scene = bpy.data.scenes['Scene']
 	frames = len(range(Scene.frame_start, Scene.frame_end + 1))
-	channel_time_span = frames * 160 + int((frames - 1) / 6)  
+	if armature.ISDIFK:
+		channel_time_span = frames * 100 
+	else:
+		channel_time_span = frames * 160 + int((frames - 1) / 6)  
 
 	channel_frame_rate = 0
 
